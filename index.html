@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pastel Splash Dash DX</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #fff0f7;
+  font-family: "Comic Sans MS", system-ui;
+  overflow: hidden;
+}
+
+#game {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background:
+    radial-gradient(circle at 20% 30%, #ffffffaa 8%, transparent 9%),
+    radial-gradient(circle at 70% 60%, #ffffffaa 10%, transparent 11%),
+    linear-gradient(#ffd6e8, #cce7ff);
+  background-size: 140px 140px;
+  animation: bg 18s linear infinite;
+}
+
+@keyframes bg {
+  from { background-position: 0 0; }
+  to { background-position: -500px 0; }
+}
+
+/* HUD */
+#hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #ffffffcc;
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-size: 16px;
+}
+
+/* Characters */
+.character {
+  position: absolute;
+  bottom: 24px;
+  font-size: 48px;
+  user-select: none;
+}
+
+#girl { left: 20px; cursor: pointer; }
+#man { right: 20px; }
+
+/* Water */
+.water {
+  position: absolute;
+  font-size: 24px;
+  animation: water 0.6s linear forwards;
+}
+@keyframes water {
+  from { transform: translate(0,0); opacity:1 }
+  to { transform: translate(220px,-120px); opacity:0 }
+}
+
+/* Guard */
+#guard {
+  position: absolute;
+  top: 50%;
+  right: -60px;
+  font-size: 42px;
+  animation: guard 6s linear infinite;
+}
+@keyframes guard {
+  0% { right: -60px; }
+  50% { right: 40%; }
+  100% { right: -60px; }
+}
+
+/* Camera */
+#camera {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  font-size: 32px;
+  animation: cam 4s ease-in-out infinite;
+}
+@keyframes cam {
+  0% { transform: translateX(-80px); }
+  50% { transform: translateX(80px); }
+  100% { transform: translateX(-80px); }
+}
+
+/* Game over */
+#over {
+  position: absolute;
+  inset: 0;
+  background: #fff0f7;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  font-size: 22px;
+}
+
+button {
+  margin-top: 12px;
+  font-size: 18px;
+  padding: 8px 22px;
+  border-radius: 16px;
+  border: none;
+  background: #ff9acb;
+}
+</style>
+</head>
+
+<body>
+
+<div id="game">
+  <div id="hud">💦 0 | 🔥 x1</div>
+
+  <div id="girl" class="character">👧🪣</div>
+  <div id="man" class="character">👔😴</div>
+  <div id="guard">👮</div>
+  <div id="camera">📷</div>
+
+  <div id="over">
+    <div>😳 Bị phát hiện!</div>
+    <div id="final"></div>
+    <button onclick="start()">Chơi lại</button>
+  </div>
+</div>
+
+<script>
+let score, combo, alertness, gameOver;
+const girl = document.getElementById("girl");
+const man = document.getElementById("man");
+const hud = document.getElementById("hud");
+const over = document.getElementById("over");
+const final = document.getElementById("final");
+
+/* sounds */
+const splashSound = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQgAAAAA");
+const alertSound = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQgAAAAA");
+
+function start() {
+  score = 0;
+  combo = 1;
+  alertness = 0;
+  gameOver = false;
+  man.textContent = "👔😴";
+  hud.textContent = "💦 0 | 🔥 x1";
+  over.style.display = "none";
+}
+start();
+
+/* Throw water */
+girl.onclick = () => {
+  if (gameOver) return;
+
+  splashSound.play();
+
+  const w = document.createElement("div");
+  w.className = "water";
+  w.textContent = "💦";
+  w.style.left = girl.offsetLeft + 40 + "px";
+  w.style.bottom = "80px";
+  game.appendChild(w);
+  setTimeout(() => w.remove(), 600);
+
+  score += combo;
+  combo = Math.min(combo + 1, 3);
+  alertness += 0.15;
+
+  hud.textContent = `💦 ${score} | 🔥 x${combo}`;
+
+  if (Math.random() < alertness * 0.15) lose();
+};
+
+/* Random checks */
+setInterval(() => {
+  if (gameOver) return;
+  if (Math.random() < alertness * 0.1) lose();
+}, 1200);
+
+/* Lose */
+function lose() {
+  if (gameOver) return;
+  gameOver = true;
+  man.textContent = "👔😳";
+  alertSound.play();
+  final.textContent = `Điểm: ${score}`;
+  over.style.display = "flex";
+}
+</script>
+
+</body>
+</html>
