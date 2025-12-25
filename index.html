@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pastel Splash Dash</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #fdf6fb;
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+}
+
+canvas {
+  display: block;
+  margin: auto;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      #ffe4ef,
+      #ffe4ef 80px,
+      #e6f1ff 80px,
+      #e6f1ff 160px
+    );
+}
+#ui {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  font-weight: bold;
+  color: #555;
+}
+#gameover {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,240,250,0.9);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+button {
+  padding: 10px 20px;
+  border: none;
+  background: #ffb7d5;
+  border-radius: 12px;
+  font-size: 16px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">💦 Điểm: <span id="score">0</span></div>
+
+<div id="gameover">
+  <h2>📸 Bị phát hiện rồi!</h2>
+  <button onclick="restart()">Chơi lại</button>
+</div>
+
+<canvas id="game" width="360" height="640"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const gameoverEl = document.getElementById("gameover");
+
+let score = 0;
+let over = false;
+
+/* ===== PLAYER ===== */
+const girl = {
+  x: 180,
+  y: 520,
+  w: 32,
+  h: 40,
+  speed: 5
+};
+
+/* ===== NPC ===== */
+const man = {
+  x: -40,
+  y: 420,
+  w: 32,
+  h: 40,
+  speed: 2
+};
+
+/* ===== CAMERA ===== */
+const camera = {
+  x: 140,
+  y: 100,
+  w: 80,
+  h: 40
+};
+
+/* ===== DRAW ===== */
+function drawGirl() {
+  ctx.fillStyle = "#ffb6d9"; // dress
+  ctx.fillRect(girl.x, girl.y, girl.w, girl.h);
+  ctx.fillStyle = "#654321"; // hair
+  ctx.fillRect(girl.x, girl.y - 12, girl.w, 12);
+}
+
+function drawMan() {
+  ctx.fillStyle = "#333";
+  ctx.fillRect(man.x, man.y, man.w, man.h);
+}
+
+function drawCamera() {
+  ctx.fillStyle = "#aaa";
+  ctx.fillRect(camera.x, camera.y, camera.w, camera.h);
+  ctx.fillStyle = "#666";
+  ctx.fillRect(camera.x + 30, camera.y + 10, 20, 20);
+}
+
+function rectHit(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+/* ===== INPUT ===== */
+let targetX = girl.x;
+canvas.addEventListener("touchstart", e => {
+  targetX = e.touches[0].clientX - canvas.offsetLeft;
+});
+
+canvas.addEventListener("touchmove", e => {
+  targetX = e.touches[0].clientX - canvas.offsetLeft;
+});
+
+canvas.addEventListener("click", () => {
+  if (rectHit(girl, man)) {
+    score++;
+    scoreEl.textContent = score;
+    man.x = -50;
+  }
+});
+
+/* ===== LOOP ===== */
+function update() {
+  if (over) return;
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // move girl
+  girl.x += (targetX - girl.x - girl.w/2) * 0.1;
+  girl.x = Math.max(0, Math.min(canvas.width - girl.w, girl.x));
+
+  // move man
+  man.x += man.speed;
+  if (man.x > canvas.width + 40) man.x = -40;
+
+  // camera detection
+  if (rectHit(girl, camera)) {
+    over = true;
+    gameoverEl.style.display = "flex";
+  }
+
+  drawCamera();
+  drawMan();
+  drawGirl();
+
+  requestAnimationFrame(update);
+}
+
+function restart() {
+  score = 0;
+  scoreEl.textContent = 0;
+  over = false;
+  gameoverEl.style.display = "none";
+  man.x = -40;
+}
+
+update();
+</script>
+</body>
+</html>
