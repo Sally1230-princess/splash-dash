@@ -3,34 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>Pastel Splash Dash Pro</title>
-
+<title>Pastel Splash Dash - Fixed</title>
 <style>
   html, body { margin: 0; padding: 0; background: #fdf6fb; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: none; }
-  canvas { display: block; margin: auto; background: #fff5f8; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
-  #ui { position: fixed; top: 20px; left: 20px; font-size: 24px; font-weight: bold; color: #d63384; text-shadow: 1px 1px white; }
+  canvas { display: block; margin: auto; background: #fff5f8; cursor: crosshair; }
+  #ui { position: fixed; top: 20px; left: 20px; font-size: 24px; font-weight: bold; color: #d63384; z-index: 10; pointer-events: none; }
   #gameover { 
     position: fixed; inset: 0; background: rgba(255,240,250,0.95); 
-    display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center;
+    display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; z-index: 20;
   }
-  h2 { color: #ff4d94; font-size: 32px; margin-bottom: 10px; }
+  h2 { color: #ff4d94; font-size: 32px; margin: 0 0 10px 0; }
   button { 
     padding: 15px 40px; border: none; background: #ffb7d5; color: white; 
     border-radius: 30px; font-size: 20px; cursor: pointer; transition: 0.3s;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   }
-  button:hover { background: #ff85b9; transform: scale(1.05); }
+  button:active { transform: scale(0.95); }
 </style>
 </head>
-
 <body>
 
 <div id="ui">🌸 Điểm: <span id="score">0</span></div>
 
 <div id="gameover">
   <h2>📸 BỊ PHÁT HIỆN RỒI!</h2>
-  <p id="final-score" style="margin-bottom: 20px;"></p>
-  <button onclick="restart()">Chơi lại</button>
+  <p id="final-score" style="margin-bottom: 20px; font-weight: bold; color: #555;"></p>
+  <button id="restartBtn">Chơi lại</button>
 </div>
 
 <canvas id="game"></canvas>
@@ -40,18 +38,34 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const scoreEl = document.getElementById("score");
 const gameoverEl = document.getElementById("gameover");
+const restartBtn = document.getElementById("restartBtn");
 
-// Cấu hình màn hình
-canvas.width = 360;
-canvas.height = 640;
+// Tự động điều chỉnh kích thước canvas theo màn hình nhưng giữ tỷ lệ
+function resize() {
+    const ratio = 360 / 640;
+    canvas.height = window.innerHeight;
+    canvas.width = canvas.height * ratio;
+    if (canvas.width > window.innerWidth) {
+        canvas.width = window.innerWidth;
+        canvas.height = canvas.width / ratio;
+    }
+}
+window.addEventListener('resize', resize);
+resize();
 
 let score = 0;
 let over = false;
-let targetX = 180;
+let targetX = canvas.width / 2;
+const splashes = [];
 
-/* ===== ÂM THANH (Dùng Web Audio API) ===== */
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+/* ===== HỆ THỐNG ÂM THANH ===== */
+let audioCtx;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
 function playSound(freq, type, duration) {
+    if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = type;
@@ -65,189 +79,159 @@ function playSound(freq, type, duration) {
 }
 
 /* ===== ĐỐI TƯỢNG ===== */
-const girl = { x: 180, y: 520, w: 40, h: 60 };
-const man = { x: -60, y: 530, w: 40, h: 60, speed: 2.5 };
-const cam = { x: 140, y: 50, w: 80, h: 40, range: 100, dir: 1 };
+const girl = { x: 0, y: 0, w: 40, h: 60 };
+const man = { x: -60, y: 0, w: 40, h: 60, speed: 2 };
+const cam = { x: 0, y: 30, w: 60, h: 30, dir: 1 };
 
-// Mảng để lưu trữ các tia nước
-const splashes = [];
-
-/* ===== VẼ CHI TIẾT ===== */
-function drawGirl(x, y) {
-    // Váy
-    ctx.fillStyle = "#ffb6d9";
-    ctx.beginPath();
-    ctx.moveTo(x, y + 60);
-    ctx.lineTo(x + 40, y + 60);
-    ctx.lineTo(x + 30, y + 20);
-    ctx.lineTo(x + 10, y + 20);
-    ctx.fill();
-    // Đầu
-    ctx.fillStyle = "#ffe0bd";
-    ctx.fillRect(x + 10, y, 20, 20);
-    // Tóc
-    ctx.fillStyle = "#654321";
-    ctx.fillRect(x + 8, y - 5, 24, 15);
-    // Mắt
-    ctx.fillStyle = "#000";
-    ctx.fillRect(x + 14, y + 5, 3, 3);
-    ctx.fillRect(x + 23, y + 5, 3, 3);
+function resetEntities() {
+    girl.y = canvas.height - 100;
+    girl.x = canvas.width / 2 - 20;
+    targetX = canvas.width / 2;
+    man.y = canvas.height - 110;
+    man.x = -100;
+    man.speed = 2 + (score * 0.1);
+    cam.x = 0; // Để camera xuất hiện bên trái, tránh kẹt ngay giữa
 }
 
-function drawMan(x, y) {
-    // Quần áo
-    ctx.fillStyle = "#4a90e2";
-    ctx.fillRect(x + 5, y + 20, 30, 40);
-    // Đầu
-    ctx.fillStyle = "#ffe0bd";
-    ctx.fillRect(x + 10, y, 20, 20);
-    // Tóc
-    ctx.fillStyle = "#333";
-    ctx.fillRect(x + 10, y - 2, 20, 7);
-}
-
-function drawCamera() {
-    // Thân máy
-    ctx.fillStyle = "#555";
-    ctx.fillRect(cam.x, cam.y, cam.w, cam.h);
-    ctx.fillStyle = "#333";
-    ctx.fillRect(cam.x + 20, cam.y + 10, 40, 20);
-    
-    // Đèn đỏ nháy
-    if (Math.floor(Date.now() / 500) % 2) {
-        ctx.fillStyle = "red";
-        ctx.beginPath();
-        ctx.arc(cam.x + 10, cam.y + 10, 4, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // Vùng quét (Tia sáng)
-    const gradient = ctx.createLinearGradient(0, cam.y, 0, canvas.height);
-    gradient.addColorStop(0, "rgba(255, 255, 0, 0.3)");
-    gradient.addColorStop(1, "rgba(255, 255, 0, 0)");
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(cam.x, cam.y + cam.h);
-    ctx.lineTo(cam.x + cam.w, cam.y + cam.h);
-    ctx.lineTo(cam.x + cam.w + 40, canvas.height);
-    ctx.lineTo(cam.x - 40, canvas.height);
-    ctx.fill();
-}
-
-// Hàm tạo tia nước
+/* ===== HIỆU ỨNG TẠT NƯỚC ===== */
 function createSplash(x, y) {
-    for (let i = 0; i < 15; i++) { // Tạo 15 tia nước nhỏ
+    for (let i = 0; i < 20; i++) {
         splashes.push({
-            x: x + Math.random() * 20 - 10,
-            y: y + Math.random() * 20 - 10,
-            radius: Math.random() * 5 + 2,
-            vx: (Math.random() - 0.5) * 5,
-            vy: (Math.random() - 0.5) * 5 - 2, // Hơi bay lên
+            x: x, y: y,
+            radius: Math.random() * 6 + 2,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.8) * 10,
             alpha: 1,
-            color: `hsl(${Math.random() * 30 + 190}, 100%, 70%)` // Màu xanh nhạt
+            color: `hsl(${190 + Math.random() * 20}, 100%, 75%)`
         });
     }
 }
 
-// Hàm vẽ tia nước
-function drawSplash(splash) {
-    ctx.globalAlpha = splash.alpha;
-    ctx.fillStyle = splash.color;
+/* ===== VẼ ===== */
+function drawGirl() {
+    ctx.fillStyle = "#ffb6d9"; // Váy
     ctx.beginPath();
-    ctx.arc(splash.x, splash.y, splash.radius, 0, Math.PI * 2);
+    ctx.moveTo(girl.x, girl.y + 60);
+    ctx.lineTo(girl.x + 40, girl.y + 60);
+    ctx.lineTo(girl.x + 30, girl.y + 20);
+    ctx.lineTo(girl.x + 10, girl.y + 20);
     ctx.fill();
-    ctx.globalAlpha = 1; // Reset alpha
+    ctx.fillStyle = "#ffe0bd"; // Mặt
+    ctx.fillRect(girl.x + 10, girl.y, 20, 20);
+    ctx.fillStyle = "#654321"; // Tóc
+    ctx.fillRect(girl.x + 8, girl.y - 5, 24, 12);
 }
 
-
-/* ===== LOGIC ===== */
-function rectHit(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+function drawMan() {
+    ctx.fillStyle = "#4a90e2";
+    ctx.fillRect(man.x + 5, man.y + 20, 30, 40);
+    ctx.fillStyle = "#ffe0bd";
+    ctx.fillRect(man.x + 10, man.y, 20, 20);
 }
 
-function handleInput(e) {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    targetX = clientX - rect.left;
+function drawCamera() {
+    // Luồng sáng nguy hiểm
+    const grad = ctx.createLinearGradient(0, cam.y, 0, canvas.height);
+    grad.addColorStop(0, "rgba(255, 255, 0, 0.4)");
+    grad.addColorStop(1, "rgba(255, 255, 0, 0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(cam.x, cam.y + cam.h);
+    ctx.lineTo(cam.x + cam.w, cam.y + cam.h);
+    ctx.lineTo(cam.x + cam.w + 50, canvas.height);
+    ctx.lineTo(cam.x - 50, canvas.height);
+    ctx.fill();
+
+    // Thân camera
+    ctx.fillStyle = "#333";
+    ctx.fillRect(cam.x, cam.y, cam.w, cam.h);
+    ctx.fillStyle = "red"; // Đèn báo
+    if (Math.floor(Date.now() / 400) % 2) ctx.beginPath(), ctx.arc(cam.x + 10, cam.y + 10, 3, 0, 7), ctx.fill();
 }
 
-canvas.addEventListener("mousemove", handleInput);
-canvas.addEventListener("touchmove", handleInput);
-canvas.addEventListener("mousedown", () => {
-    if (over) return;
-    // Kiểm tra va chạm với Man để ghi điểm
-    if (Math.abs(girl.x - man.x) < 40) { // Khoảng cách đủ gần để tạt
-        score++;
-        scoreEl.textContent = score;
-        createSplash(man.x + man.w / 2, man.y + man.h / 2); // Tạo hiệu ứng tạt nước tại Man
-        man.x = -60;
-        man.speed += 0.2; // Khó dần
-        playSound(600, 'sine', 0.1);
-    }
-});
-
+/* ===== VÒNG LẶP CHÍNH ===== */
 function update() {
     if (over) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Di chuyển Girl
-    girl.x += (targetX - girl.x - girl.w/2) * 0.15;
-    girl.x = Math.max(0, Math.min(canvas.width - girl.w, girl.x));
-
-    // Di chuyển Man
+    // Di chuyển
+    girl.x += (targetX - girl.x - girl.w/2) * 0.1;
     man.x += man.speed;
-    if (man.x > canvas.width + 60) man.x = -60;
+    if (man.x > canvas.width + 50) man.x = -100;
 
-    // Di chuyển Camera quét qua lại
-    cam.x += cam.dir * 1.5;
+    cam.x += cam.dir * (1.5 + score * 0.05);
     if (cam.x > canvas.width - cam.w || cam.x < 0) cam.dir *= -1;
 
-    // Cập nhật và vẽ các tia nước
-    for (let i = splashes.length - 1; i >= 0; i--) {
-        const splash = splashes[i];
-        splash.x += splash.vx;
-        splash.y += splash.vy;
-        splash.alpha -= 0.03; // Làm mờ dần
-        splash.radius *= 0.98; // Nhỏ dần
-        if (splash.alpha <= 0.05 || splash.radius < 1) {
-            splashes.splice(i, 1); // Xóa tia nước khi biến mất
-        }
-        drawSplash(splash);
-    }
-
-
-    // Kiểm tra Camera bắt
-    // Nếu chân của Girl nằm trong khoảng X của luồng sáng camera
-    const camLeftAtGirl = cam.x - 30; // Vùng quét rộng hơn camera vật lý
-    const camRightAtGirl = cam.x + cam.w + 30;
-    if (girl.x + girl.w > camLeftAtGirl && girl.x < camRightAtGirl) {
+    // Check va chạm Camera (Luồng sáng)
+    const lightLeft = cam.x - 30;
+    const lightRight = cam.x + cam.w + 30;
+    if (girl.x + girl.w > lightLeft && girl.x < lightRight) {
         over = true;
-        document.getElementById("final-score").textContent = "Bạn ghi được: " + score + " điểm";
         gameoverEl.style.display = "flex";
-        playSound(150, 'sawtooth', 0.5);
+        document.getElementById("final-score").textContent = "Ghi được: " + score + " điểm";
+        playSound(100, 'sawtooth', 0.4);
     }
+
+    // Xử lý tia nước
+    for (let i = splashes.length - 1; i >= 0; i--) {
+        const s = splashes[i];
+        s.x += s.vx; s.y += s.vy; s.alpha -= 0.02;
+        if (s.alpha <= 0) splashes.splice(i, 1);
+        else {
+            ctx.globalAlpha = s.alpha;
+            ctx.fillStyle = s.color;
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, 7); ctx.fill();
+        }
+    }
+    ctx.globalAlpha = 1;
 
     drawCamera();
-    drawMan(man.x, man.y);
-    drawGirl(girl.x, girl.y);
+    drawMan();
+    drawGirl();
 
     requestAnimationFrame(update);
 }
 
+/* ===== SỰ KIỆN ===== */
+const inputHandler = (e) => {
+    initAudio(); // Kích hoạt audio khi chạm lần đầu
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    targetX = x;
+};
+
+canvas.addEventListener("mousedown", (e) => {
+    inputHandler(e);
+    if (Math.abs(girl.x - man.x) < 60) {
+        score++;
+        scoreEl.textContent = score;
+        createSplash(man.x + 20, man.y + 20);
+        man.x = -100;
+        playSound(500, 'sine', 0.1);
+    }
+});
+canvas.addEventListener("mousemove", inputHandler);
+canvas.addEventListener("touchstart", (e) => { e.preventDefault(); inputHandler(e); }, {passive: false});
+canvas.addEventListener("touchmove", (e) => { e.preventDefault(); inputHandler(e); }, {passive: false});
+
 function restart() {
     score = 0;
-    scoreEl.textContent = 0;
+    scoreEl.textContent = "0";
     over = false;
-    man.x = -60;
-    man.speed = 2.5;
-    splashes.length = 0; // Xóa hết tia nước cũ
     gameoverEl.style.display = "none";
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    splashes.length = 0;
+    resetEntities();
     update();
 }
 
-// Khởi chạy
+restartBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    restart();
+});
+
+// Khởi tạo vị trí ban đầu
+resetEntities();
 update();
 </script>
 </body>
